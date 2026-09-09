@@ -22,7 +22,7 @@ const typeLabel = {
 };
 
 export default function Pec() {
-  const { companyId, companies } = useCompany();
+  const { companyId, companies, canWriteAny } = useCompany();
   const [msgs, setMsgs] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ destinatario: "", oggetto: "", corpo: "" });
@@ -67,7 +67,7 @@ export default function Pec() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="pec-compose-btn"><Send className="h-4 w-4 mr-2" /> Componi PEC</Button>
+            <Button data-testid="pec-compose-btn" disabled={!canWriteAny}><Send className="h-4 w-4 mr-2" /> Componi PEC</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Nuova PEC certificata</DialogTitle></DialogHeader>

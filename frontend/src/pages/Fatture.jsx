@@ -9,7 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CheckCircle2, Search } from "lucide-react";
+import { CheckCircle2, Search, Send } from "lucide-react";
 
 const StatusBadge = ({ stato }) => {
   const map = {
@@ -22,7 +22,7 @@ const StatusBadge = ({ stato }) => {
 };
 
 export default function Fatture() {
-  const { companyId } = useCompany();
+  const { companyId, canWrite } = useCompany();
   const [invoices, setInvoices] = useState([]);
   const [stato, setStato] = useState("all");
   const [q, setQ] = useState("");
@@ -40,6 +40,15 @@ export default function Fatture() {
       load();
     } catch {
       toast.error("Errore");
+    }
+  };
+
+  const sendReminder = async (id) => {
+    try {
+      const { data } = await api.post(`/invoices/${id}/send-reminder`);
+      toast.success(data.message || "Sollecito inviato");
+    } catch (e) {
+      toast.error("Invio sollecito non riuscito");
     }
   };
 
@@ -100,11 +109,17 @@ export default function Fatture() {
                   <td className="px-5 py-3 text-right font-mono-num font-semibold">{euro(i.totale)}</td>
                   <td className="px-5 py-3"><StatusBadge stato={i.stato} /></td>
                   <td className="px-5 py-3 text-right">
-                    {i.stato !== "pagata" && (
-                      <Button size="sm" variant="ghost" onClick={() => markPaid(i.id)}
-                        data-testid={`mark-paid-${i.id}`} className="text-emerald-600 hover:text-emerald-700">
-                        <CheckCircle2 className="h-4 w-4 mr-1" /> Incassa
-                      </Button>
+                    {i.stato !== "pagata" && canWrite(i.company_id) && (
+                      <div className="inline-flex gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => sendReminder(i.id)}
+                          data-testid={`send-reminder-${i.id}`} className="text-accent hover:text-accent">
+                          <Send className="h-4 w-4 mr-1" /> Sollecita
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => markPaid(i.id)}
+                          data-testid={`mark-paid-${i.id}`} className="text-emerald-600 hover:text-emerald-700">
+                          <CheckCircle2 className="h-4 w-4 mr-1" /> Incassa
+                        </Button>
+                      </div>
                     )}
                   </td>
                 </tr>

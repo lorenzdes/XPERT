@@ -18,6 +18,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, Strea
 
 import auth as A
 import seed as S
+import emailer as EM
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -65,6 +66,67 @@ class ChatInput(BaseModel):
 
 async def current_user(request: Request):
     return await A.get_current_user(request, db)
+
+
+# ---------- Authorization (per-company memberships) ----------
+ROLE_ORDER = {"viewer": 1, "editor": 2, "admin": 3}
+
+
+async def accessible_company_ids(user: dict):
+    if user.get("role") == "admin":
+        docs = await db.companies.find({}, {"id": 1, "_id": 0}).to_list(500)
+        return [d["id"] for d in docs]
+    mems = await db.company_members.find({"user_id": user["id"]}, {"_id": 0}).to_list(500)
+    return [m["company_id"] for m in mems]
+
+
+async def company_role(user: dict, company_id: str):
+    if user.get("role") == "admin":
+        return "admin"
+    mem = await db.company_members.find_one({"user_id": user["id"], "company_id": company_id}, {"_id": 0})
+    return mem["role"] if mem else None
+
+
+async def scoped_filter(user: dict, company_id: str):
+    allowed = await accessible_company_ids(user)
+    if company_id and company_id != "all":
+        if company_id not in allowed:
+            raise HTTPException(status_code=404, detail="Azienda non trovata")
+        return {"company_id": company_id}
+    return {"company_id": {"$in": allowed}}
+
+
+async def require_write(user: dict, company_id: str):
+    role = await company_role(user, company_id)
+    if not role or ROLE_ORDER.get(role, 0) < ROLE_ORDER["editor"]:
+        raise HTTPException(status_code=403, detail="Permesso negato: serve ruolo editor")
+    return role
+
+
+async def require_access(user: dict, company_id: str):
+    if not await company_role(user, company_id):
+        raise HTTPException(status_code=404, detail="Risorsa non trovata")
+
+
+def require_admin(user: dict):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo l'amministratore può gestire i collaboratori")
+
+
+class MembershipInput(BaseModel):
+    company_id: str
+    role: str
+
+
+class CollaboratorCreate(BaseModel):
+    email: EmailStr
+    name: str
+    password: str
+    memberships: list[MembershipInput] = []
+
+
+class CollaboratorUpdate(BaseModel):
+    memberships: list[MembershipInput] = []
 
 
 # ---------- Auth endpoints ----------
@@ -216,16 +278,16 @@ async def reset_password(payload: ResetInput):
 # ---------- CRM data endpoints ----------
 @api_router.get("/companies")
 async def get_companies(user: dict = Depends(current_user)):
-    return await db.companies.find({}, {"_id": 0}).to_list(100)
-
-
-def _invoice_filter(company_id):
-    return {} if not company_id or company_id == "all" else {"company_id": company_id}
+    allowed = await accessible_company_ids(user)
+    comps = await db.companies.find({"id": {"$in": allowed}}, {"_id": 0}).to_list(500)
+    for c in comps:
+        c["role"] = await company_role(user, c["id"])
+    return comps
 
 
 @api_router.get("/dashboard/summary")
 async def dashboard_summary(company_id: str = "all", user: dict = Depends(current_user)):
-    invoices = await db.invoices.find(_invoice_filter(company_id), {"_id": 0}).to_list(2000)
+    invoices = await db.invoices.find(await scoped_filter(user, company_id), {"_id": 0}).to_list(2000)
     totale_fatturato = sum(i["totale"] for i in invoices)
     incassato = sum(i["incassato"] for i in invoices)
     in_scadenza = sum(i["totale"] for i in invoices if i["stato"] == "da_pagare")
@@ -257,7 +319,7 @@ async def dashboard_summary(company_id: str = "all", user: dict = Depends(curren
 
 @api_router.get("/invoices")
 async def get_invoices(company_id: str = "all", stato: str = "all", user: dict = Depends(current_user)):
-    q = _invoice_filter(company_id)
+    q = await scoped_filter(user, company_id)
     if stato and stato != "all":
         q["stato"] = stato
     inv = await db.invoices.find(q, {"_id": 0}).to_list(2000)
@@ -270,15 +332,27 @@ async def mark_paid(invoice_id: str, user: dict = Depends(current_user)):
     inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Fattura non trovata")
+    await require_write(user, inv["company_id"])
     await db.invoices.update_one({"id": invoice_id}, {"$set": {
         "stato": "pagata", "incassato": inv["totale"],
         "data_pagamento": datetime.now(timezone.utc).isoformat()}})
     return {"message": "Fattura segnata come pagata"}
 
 
+@api_router.post("/invoices/{invoice_id}/send-reminder")
+async def send_reminder(invoice_id: str, user: dict = Depends(current_user)):
+    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Fattura non trovata")
+    await require_write(user, inv["company_id"])
+    company = await db.companies.find_one({"id": inv["company_id"]}, {"_id": 0}) or {}
+    await EM.send_invoice_reminder(user["email"], user.get("name", ""), inv, company)
+    return {"message": f"Sollecito inviato via email a {user['email']}"}
+
+
 @api_router.get("/drive/files")
 async def drive_files(company_id: str = "all", user: dict = Depends(current_user)):
-    return await db.drive_files.find(_invoice_filter(company_id), {"_id": 0}).to_list(200)
+    return await db.drive_files.find(await scoped_filter(user, company_id), {"_id": 0}).to_list(200)
 
 
 @api_router.post("/drive/files/{file_id}/import")
@@ -286,19 +360,24 @@ async def import_drive_file(file_id: str, user: dict = Depends(current_user)):
     f = await db.drive_files.find_one({"id": file_id}, {"_id": 0})
     if not f:
         raise HTTPException(status_code=404, detail="File non trovato")
+    await require_write(user, f["company_id"])
     await db.drive_files.update_one({"id": file_id}, {"$set": {"importato": True, "stato_import": "importato"}})
     return {"message": "File importato e analizzato"}
 
 
 @api_router.get("/pec/messages")
 async def pec_messages(company_id: str = "all", user: dict = Depends(current_user)):
-    msgs = await db.pec_messages.find(_invoice_filter(company_id), {"_id": 0}).to_list(200)
+    msgs = await db.pec_messages.find(await scoped_filter(user, company_id), {"_id": 0}).to_list(200)
     msgs.sort(key=lambda x: x["data_ricezione"], reverse=True)
     return msgs
 
 
 @api_router.post("/pec/messages/{msg_id}/read")
 async def pec_read(msg_id: str, user: dict = Depends(current_user)):
+    msg = await db.pec_messages.find_one({"id": msg_id}, {"_id": 0})
+    if not msg:
+        raise HTTPException(status_code=404, detail="Messaggio non trovato")
+    await require_access(user, msg["company_id"])
     await db.pec_messages.update_one({"id": msg_id}, {"$set": {"letto": True}})
     return {"message": "ok"}
 
@@ -312,6 +391,7 @@ class PecSendInput(BaseModel):
 
 @api_router.post("/pec/send")
 async def pec_send(payload: PecSendInput, user: dict = Depends(current_user)):
+    await require_write(user, payload.company_id)
     msg = {
         "id": f"pec_{uuid.uuid4().hex[:8]}",
         "company_id": payload.company_id,
@@ -331,7 +411,7 @@ async def pec_send(payload: PecSendInput, user: dict = Depends(current_user)):
 
 @api_router.get("/bilanci")
 async def get_bilanci(company_id: str = "all", user: dict = Depends(current_user)):
-    b = await db.bilanci.find(_invoice_filter(company_id), {"_id": 0}).to_list(200)
+    b = await db.bilanci.find(await scoped_filter(user, company_id), {"_id": 0}).to_list(200)
     b.sort(key=lambda x: (x["company_id"], x["anno"]), reverse=True)
     return b
 
@@ -339,7 +419,8 @@ async def get_bilanci(company_id: str = "all", user: dict = Depends(current_user
 @api_router.get("/sync/status")
 async def sync_status(user: dict = Depends(current_user)):
     st = await db.sync_state.find_one({"id": "global"}, {"_id": 0})
-    unread = await db.pec_messages.count_documents({"letto": False})
+    allowed = await accessible_company_ids(user)
+    unread = await db.pec_messages.count_documents({"letto": False, "company_id": {"$in": allowed}})
     return {**(st or {}), "pec_unread": unread}
 
 
@@ -351,10 +432,12 @@ async def sync_teamsystem(user: dict = Depends(current_user)):
 
 
 # ---------- Copilot ----------
-async def build_crm_context(company_id):
-    invoices = await db.invoices.find(_invoice_filter(company_id), {"_id": 0}).to_list(2000)
-    bilanci = await db.bilanci.find(_invoice_filter(company_id), {"_id": 0}).to_list(50)
-    companies = await db.companies.find({}, {"_id": 0}).to_list(50)
+async def build_crm_context(user, company_id):
+    flt = await scoped_filter(user, company_id)
+    invoices = await db.invoices.find(flt, {"_id": 0}).to_list(2000)
+    bilanci = await db.bilanci.find(flt, {"_id": 0}).to_list(50)
+    allowed = await accessible_company_ids(user)
+    companies = await db.companies.find({"id": {"$in": allowed}}, {"_id": 0}).to_list(50)
     tot = sum(i["totale"] for i in invoices)
     inc = sum(i["incassato"] for i in invoices)
     scaduto = [i for i in invoices if i["stato"] == "scaduta"]
@@ -395,7 +478,7 @@ async def copilot_chat(payload: ChatInput, user: dict = Depends(current_user)):
         {"session_id": payload.session_id, "user_id": user["id"]}, {"_id": 0}).to_list(500)
     history.sort(key=lambda x: x["created_at"])
     transcript = "\n".join(f"{m['role']}: {m['content']}" for m in history[-8:])
-    crm_context = await build_crm_context(payload.company_id)
+    crm_context = await build_crm_context(user, payload.company_id)
 
     system_message = (
         "Sei il Copilot AI di FinDash CRM, un assistente esperto di contabilità italiana, fatturazione "
@@ -452,6 +535,63 @@ async def cron_sync(request: Request, background_tasks: BackgroundTasks):
     return {"status": "accepted"}
 
 
+# ---------- Collaborators (admin only) ----------
+@api_router.get("/collaborators")
+async def list_collaborators(user: dict = Depends(current_user)):
+    require_admin(user)
+    users = await db.users.find({"is_collaborator": True}, {"_id": 0, "password_hash": 0}).to_list(500)
+    result = []
+    for u in users:
+        mems = await db.company_members.find({"user_id": u["id"]}, {"_id": 0}).to_list(500)
+        result.append({"id": u["id"], "email": u["email"], "name": u["name"],
+                       "memberships": [{"company_id": m["company_id"], "role": m["role"]} for m in mems]})
+    return result
+
+
+@api_router.post("/collaborators")
+async def create_collaborator(payload: CollaboratorCreate, background_tasks: BackgroundTasks,
+                              user: dict = Depends(current_user)):
+    require_admin(user)
+    email = payload.email.lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=400, detail="Email già registrata")
+    new = {"id": f"user_{uuid.uuid4().hex[:12]}", "email": email, "name": payload.name,
+           "password_hash": A.hash_password(payload.password), "role": "user",
+           "auth_provider": "password", "token_version": 0, "is_collaborator": True,
+           "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.users.insert_one(new)
+    for m in payload.memberships:
+        if m.role in ROLE_ORDER:
+            await db.company_members.insert_one({"user_id": new["id"], "company_id": m.company_id,
+                                                 "role": m.role, "created_at": datetime.now(timezone.utc).isoformat()})
+    background_tasks.add_task(EM.send_collaborator_invite, email, payload.name)
+    return {"id": new["id"], "email": email, "name": payload.name}
+
+
+@api_router.put("/collaborators/{cid}")
+async def update_collaborator(cid: str, payload: CollaboratorUpdate, user: dict = Depends(current_user)):
+    require_admin(user)
+    target = await db.users.find_one({"id": cid, "is_collaborator": True}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Collaboratore non trovato")
+    await db.company_members.delete_many({"user_id": cid})
+    for m in payload.memberships:
+        if m.role in ROLE_ORDER:
+            await db.company_members.insert_one({"user_id": cid, "company_id": m.company_id,
+                                                 "role": m.role, "created_at": datetime.now(timezone.utc).isoformat()})
+    return {"message": "Accessi aggiornati"}
+
+
+@api_router.delete("/collaborators/{cid}")
+async def delete_collaborator(cid: str, user: dict = Depends(current_user)):
+    require_admin(user)
+    await db.company_members.delete_many({"user_id": cid})
+    res = await db.users.delete_one({"id": cid, "is_collaborator": True})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Collaboratore non trovato")
+    return {"message": "Collaboratore rimosso"}
+
+
 @api_router.get("/")
 async def root():
     return {"message": "FinDash CRM API"}
@@ -494,6 +634,8 @@ async def startup():
     await db.password_reset_requests.create_index("email")
     await db.password_reset_requests.create_index("created_at", expireAfterSeconds=900)
     await db.user_sessions.create_index("session_token")
+    await db.company_members.create_index("user_id")
+    await db.company_members.create_index([("user_id", 1), ("company_id", 1)], unique=True)
     await seed_admin()
     await S.seed_all(db)
 

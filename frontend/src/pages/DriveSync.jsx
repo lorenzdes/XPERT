@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { HardDrive, FileText, FileCode, Download, CheckCircle2 } from "lucide-react";
 
 export default function DriveSync() {
-  const { companyId } = useCompany();
+  const { companyId, canWrite } = useCompany();
   const [files, setFiles] = useState([]);
 
   const load = () => {
@@ -82,16 +82,16 @@ export default function DriveSync() {
                       : <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200">In attesa</Badge>}
                   </td>
                   <td className="px-5 py-3 text-right">
-                    {!f.importato ? (
+                    {!f.importato && canWrite(f.company_id) ? (
                       <Button size="sm" variant="ghost" onClick={() => importFile(f.id)}
                         data-testid={`import-file-${f.id}`} className="text-accent">
                         <Download className="h-4 w-4 mr-1" /> Importa e analizza
                       </Button>
-                    ) : (
+                    ) : f.importato ? (
                       <span className="inline-flex items-center text-emerald-600 text-xs">
                         <CheckCircle2 className="h-4 w-4 mr-1" /> OK
                       </span>
-                    )}
+                    ) : null}
                   </td>
                 </tr>
               ))}

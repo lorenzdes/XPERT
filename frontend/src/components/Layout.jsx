@@ -5,7 +5,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { api } from "@/lib/api";
 import {
   LayoutDashboard, FileText, HardDrive, Mail, Bot, BarChart3, Settings,
-  TrendingUp, RefreshCw, LogOut, Moon, Sun,
+  TrendingUp, RefreshCw, LogOut, Moon, Sun, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,7 @@ const NAV = [
   { to: "/pec", label: "PEC Aruba", icon: Mail },
   { to: "/copilot", label: "CRM Copilot AI", icon: Bot },
   { to: "/bilanci", label: "Estrazione Bilanci", icon: BarChart3 },
+  { to: "/collaboratori", label: "Collaboratori", icon: Users, adminOnly: true },
   { to: "/impostazioni", label: "Impostazioni CRM", icon: Settings },
 ];
 
@@ -86,7 +87,7 @@ export default function Layout() {
           <span className="font-heading text-lg font-bold text-white">FinDash CRM</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {NAV.map((item) => (
+          {NAV.filter((i) => !i.adminOnly || user?.role === "admin").map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

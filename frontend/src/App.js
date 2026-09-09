@@ -15,6 +15,7 @@ import DriveSync from "@/pages/DriveSync";
 import Pec from "@/pages/Pec";
 import Copilot from "@/pages/Copilot";
 import Bilanci from "@/pages/Bilanci";
+import Collaboratori from "@/pages/Collaboratori";
 import Settings from "@/pages/Settings";
 
 function ProtectedRoute({ children }) {
@@ -54,6 +55,7 @@ function AppRouter() {
         <Route path="pec" element={<Pec />} />
         <Route path="copilot" element={<Copilot />} />
         <Route path="bilanci" element={<Bilanci />} />
+        <Route path="collaboratori" element={<Collaboratori />} />
         <Route path="impostazioni" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

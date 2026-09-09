@@ -18,8 +18,12 @@ export function CompanyProvider({ children }) {
     load();
   }, [load]);
 
+  const roleFor = (cid) => companies.find((c) => c.id === cid)?.role || null;
+  const canWrite = (cid) => ["editor", "admin"].includes(roleFor(cid));
+  const canWriteAny = companies.some((c) => ["editor", "admin"].includes(c.role));
+
   return (
-    <CompanyContext.Provider value={{ companies, companyId, setCompanyId }}>
+    <CompanyContext.Provider value={{ companies, companyId, setCompanyId, roleFor, canWrite, canWriteAny, reload: load }}>
       {children}
     </CompanyContext.Provider>
   );

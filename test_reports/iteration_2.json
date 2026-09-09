@@ -1,0 +1,29 @@
+{
+  "summary": "Frontend E2E of iteration 2 (collaborators RBAC + email reminders) on FinDash CRM. Verified: admin sees 'Collaboratori' nav (data-testid=nav-collaboratori) while collaborator does NOT; admin created a new collaborator via dialog (name/email/password + per-company Select role-select-<cid>), card appeared with correct role badges (Solo lettura + Modifica); admin edited membership (viewer -> editor) and deletion removed the card; collaborator (mario.rossi@example.org) sees only cmp_001 (Rossi, viewer) + cmp_002 (Bianchi, editor) in company-selector - cmp_003 is hidden; on Fatture, Rossi (viewer) shows 14 rows with 0 mark-paid & 0 send-reminder buttons (correctly gated by canWrite), Bianchi (editor) shows 15 rows with 5 write-action pairs; 'Tutte le aziende' view shows 29 rows and only 5 write pairs (Bianchi only) - matches RBAC. Admin clicked Sollecita on unpaid invoice: POST /api/invoices/{id}/send-reminder -> 200 with body 'Sollecito inviato via email a lorello97@gmail.com' and Italian success toast rendered. Cleanup: deleted TEST_ collaborators; admin (lorello97@gmail.com) and mario.rossi collaborator preserved.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/collaboratori (non-admin direct URL)", "issues": ["Route is not client-side protected. A collaborator visiting /collaboratori directly still renders the page shell with the 'Nuovo collaboratore' button and empty list (GET /collaborators returns 403 silently caught, so no data leak). Recommendation: hide route or redirect non-admin users in the router / show an 'Accesso negato' state."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "OPTIONAL: Protect /collaboratori route in the frontend router (admin-only guard) so non-admins are redirected instead of seeing an empty admin page.",
+    "OPTIONAL: The DEV-only webpack-dev-server-client-overlay iframe appears on ResizeObserver warnings from Recharts and intercepts clicks in Playwright. Not visible to end users but blocks automation; consider silencing via CRA overlay config or ignoring the warning in code."
+  ],
+  "critical_code_review_comments": [
+    "Collaboratori.jsx renders unconditionally; add role check (user?.role === 'admin') to avoid confusing UI for collaborators arriving via direct URL.",
+    "Fatture 'Tutte le aziende' view already gates buttons via canWrite(i.company_id) which is correct; server.py also enforces via require_write/scoped_filter (curl-verified).",
+    "CompanyContext silently swallows /companies failure - consider a toast for real failures (currently OK because backend seeds are stable)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (curl+pytest previously)", "frontend": "100% of iteration-2 flows"},
+  "test_credentials": "Admin lorello97@gmail.com / Admin123! (preserved). Collaborator mario.rossi@example.org / Collab123! (preserved, cmp_001 viewer + cmp_002 editor). Cleaned all TEST_ collaborators created during this run.",
+  "seed_data_creation": "Created & deleted transient TEST_collab_<ts>@example.com collaborators for CRUD verification; no leftovers.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 2 focus: RBAC + email. All frontend gating works as designed. Only nit: /collaboratori route is not admin-guarded in the router (backend blocks data but UI shell renders). Company IDs used in seed: cmp_001=Rossi Costruzioni (mario viewer), cmp_002=Bianchi Logistica (mario editor), cmp_003=hidden from mario. Real emails only deliverable to gmail admin (Resend proxy rejects example.org/.com by design).",
+  "rca of the issue": "N/A - no failures."
+}
