@@ -16,7 +16,7 @@ const AuthShell = ({ children }) => (
         <div className="h-10 w-10 rounded-xl bg-accent flex items-center justify-center">
           <TrendingUp className="h-5 w-5" />
         </div>
-        <span className="font-heading text-xl font-bold">FinDash CRM</span>
+        <span className="font-heading text-xl font-bold">XPERT</span>
       </div>
       <div className="relative z-10 space-y-4">
         <h1 className="font-heading text-4xl font-bold leading-tight">
@@ -26,7 +26,7 @@ const AuthShell = ({ children }) => (
           Dashboard integrata con TeamSystem, PEC Aruba e Google Drive. Interroga il tuo CRM con il Copilot AI.
         </p>
       </div>
-      <div className="relative z-10 text-slate-400 text-sm">© {new Date().getFullYear()} FinDash CRM — Demo</div>
+      <div className="relative z-10 text-slate-400 text-sm">© {new Date().getFullYear()} XPERT — Demo</div>
     </div>
     <div className="flex items-center justify-center p-6 sm:p-12">{children}</div>
   </div>

@@ -4,9 +4,9 @@ import { useCompany } from "@/context/CompanyContext";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, AreaChart, Area, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
-import { Euro, TrendingUp, Clock, AlertTriangle } from "lucide-react";
+import { Euro, TrendingUp, TrendingDown, Clock, AlertTriangle } from "lucide-react";
 
 const StatusBadge = ({ stato }) => {
   const map = {
@@ -36,13 +36,26 @@ export default function Dashboard() {
   const { companyId } = useCompany();
   const [data, setData] = useState(null);
   const [invoices, setInvoices] = useState([]);
+  const [forecast, setForecast] = useState(null);
 
   useEffect(() => {
     api.get(`/dashboard/summary?company_id=${companyId}`).then((r) => setData(r.data)).catch(() => {});
     api.get(`/invoices?company_id=${companyId}`).then((r) => setInvoices(r.data.slice(0, 8))).catch(() => {});
+    api.get(`/dashboard/forecast?company_id=${companyId}&months=3`).then((r) => setForecast(r.data)).catch(() => {});
   }, [companyId]);
 
   if (!data) return <div className="animate-pulse text-muted-foreground">Caricamento...</div>;
+
+  const forecastData = forecast
+    ? [
+        ...forecast.history.map((h) => ({ mese: h.mese, reale: h.fatturato })),
+        ...forecast.forecast.map((f) => ({ mese: f.mese, previsione: f.fatturato_previsto })),
+      ]
+    : [];
+  if (forecast && forecast.history.length && forecast.forecast.length) {
+    forecastData[forecast.history.length - 1].previsione =
+      forecast.history[forecast.history.length - 1].fatturato;
+  }
 
   return (
     <div className="space-y-6" data-testid="dashboard-view">
@@ -91,6 +104,40 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
       </Card>
+
+      {forecast && forecast.forecast.length > 0 && (
+        <Card className="p-5 fade-up" style={{ animationDelay: "240ms" }} data-testid="forecast-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="font-heading text-lg font-semibold">Previsione Fatturato</h3>
+              <p className="text-sm text-muted-foreground">Proiezione prossimi 3 mesi · {forecast.method}</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Previsti 3 mesi</p>
+                <p className="font-heading text-xl font-bold font-mono-num" data-testid="forecast-total">{euro(forecast.total_forecast)}</p>
+              </div>
+              <Badge variant="outline" className={forecast.growth_pct >= 0 ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-rose-100 text-rose-700 border-rose-200"}>
+                {forecast.growth_pct >= 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
+                {forecast.growth_pct >= 0 ? "+" : ""}{forecast.growth_pct}%/mese
+              </Badge>
+            </div>
+          </div>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={forecastData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="mese" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v) => euro(v)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }} />
+                <Legend />
+                <Line type="monotone" dataKey="reale" name="Fatturato reale" stroke="#2563EB" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="previsione" name="Previsione" stroke="#D97706" strokeWidth={2} strokeDasharray="6 4" dot={{ r: 3 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
 
       <Card className="fade-up" style={{ animationDelay: "260ms" }} data-testid="recent-invoices-table">
         <div className="p-5 border-b border-border">

@@ -6,10 +6,38 @@ from datetime import datetime, timezone, timedelta
 random.seed(42)
 
 COMPANIES = [
-    {"id": "cmp_001", "name": "Rossi Costruzioni S.r.l.", "piva": "IT01234567890", "city": "Milano", "sdi": "M5UXCR1"},
-    {"id": "cmp_002", "name": "Bianchi Logistica S.p.A.", "piva": "IT09876543210", "city": "Bologna", "sdi": "USAL8PV"},
-    {"id": "cmp_003", "name": "Verdi Consulting S.r.l.", "piva": "IT05556667770", "city": "Roma", "sdi": "KRRH6B9"},
+    {"id": "cmp_001", "name": "Rossi Costruzioni S.r.l.", "piva": "IT01234567890", "city": "Milano", "sdi": "M5UXCR1", "settore": "Costruzioni"},
+    {"id": "cmp_002", "name": "Bianchi Logistica S.p.A.", "piva": "IT09876543210", "city": "Bologna", "sdi": "USAL8PV", "settore": "Trasporti e Logistica"},
+    {"id": "cmp_003", "name": "Verdi Consulting S.r.l.", "piva": "IT05556667770", "city": "Roma", "sdi": "KRRH6B9", "settore": "Consulenza"},
 ]
+
+# Benchmark di settore: medie e aziende comparabili (dati di mercato realistici).
+SECTOR_BENCHMARKS = {
+    "Costruzioni": {
+        "media": {"ricavi": 2100000, "ebitda_margin_pct": 11.5, "roe_pct": 9.2, "indice_liquidita": 1.25, "indebitamento": 2.1},
+        "peers": [
+            {"nome": "Edil Nord S.p.A.", "ricavi": 3200000, "ebitda_margin_pct": 13.1, "roe_pct": 11.0, "indice_liquidita": 1.35, "indebitamento": 1.8},
+            {"nome": "Costruzioni Adriatiche S.r.l.", "ricavi": 1500000, "ebitda_margin_pct": 9.8, "roe_pct": 7.5, "indice_liquidita": 1.10, "indebitamento": 2.4},
+            {"nome": "Gruppo Muratori Italia", "ricavi": 2600000, "ebitda_margin_pct": 12.0, "roe_pct": 10.1, "indice_liquidita": 1.28, "indebitamento": 2.0},
+        ],
+    },
+    "Trasporti e Logistica": {
+        "media": {"ricavi": 3400000, "ebitda_margin_pct": 9.0, "roe_pct": 8.1, "indice_liquidita": 1.15, "indebitamento": 2.6},
+        "peers": [
+            {"nome": "Veloce Logistics S.r.l.", "ricavi": 4100000, "ebitda_margin_pct": 10.2, "roe_pct": 9.4, "indice_liquidita": 1.22, "indebitamento": 2.3},
+            {"nome": "TransItalia Cargo S.p.A.", "ricavi": 2900000, "ebitda_margin_pct": 7.8, "roe_pct": 6.9, "indice_liquidita": 1.05, "indebitamento": 3.0},
+            {"nome": "Adria Spedizioni", "ricavi": 3200000, "ebitda_margin_pct": 8.9, "roe_pct": 8.0, "indice_liquidita": 1.18, "indebitamento": 2.5},
+        ],
+    },
+    "Consulenza": {
+        "media": {"ricavi": 1200000, "ebitda_margin_pct": 18.5, "roe_pct": 15.0, "indice_liquidita": 1.60, "indebitamento": 1.2},
+        "peers": [
+            {"nome": "Advisory Partners S.r.l.", "ricavi": 1600000, "ebitda_margin_pct": 21.0, "roe_pct": 18.2, "indice_liquidita": 1.75, "indebitamento": 0.9},
+            {"nome": "Studio Associato Meridiano", "ricavi": 900000, "ebitda_margin_pct": 16.2, "roe_pct": 12.8, "indice_liquidita": 1.45, "indebitamento": 1.4},
+            {"nome": "NextGen Consulting Italia", "ricavi": 1300000, "ebitda_margin_pct": 19.1, "roe_pct": 15.6, "indice_liquidita": 1.62, "indebitamento": 1.1},
+        ],
+    },
+}
 
 CLIENTS = [
     "ACME Italia S.p.A.", "Delta Servizi S.r.l.", "Ferramenta Lombarda", "Studio Tecnico Neri",
@@ -185,6 +213,8 @@ def generate_bilanci():
 async def seed_all(db):
     if await db.companies.count_documents({}) == 0:
         await db.companies.insert_many([dict(c) for c in COMPANIES])
+    for c in COMPANIES:
+        await db.companies.update_one({"id": c["id"]}, {"$set": {"settore": c["settore"]}})
     if await db.invoices.count_documents({}) == 0:
         await db.invoices.insert_many(generate_invoices())
     if await db.pec_messages.count_documents({}) == 0:

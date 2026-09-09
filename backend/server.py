@@ -431,6 +431,95 @@ async def sync_teamsystem(user: dict = Depends(current_user)):
     return {"message": "Sincronizzazione TeamSystem completata", "teamsystem_last_sync": now}
 
 
+def _month_add(ym, k):
+    y, m = int(ym[:4]), int(ym[5:7])
+    idx = (y * 12 + (m - 1)) + k
+    return f"{idx // 12:04d}-{idx % 12 + 1:02d}"
+
+
+@api_router.get("/dashboard/forecast")
+async def dashboard_forecast(company_id: str = "all", months: int = 3, user: dict = Depends(current_user)):
+    import statistics
+    invoices = await db.invoices.find(await scoped_filter(user, company_id), {"_id": 0}).to_list(2000)
+    monthly = {}
+    for i in invoices:
+        m = i["data_emissione"][:7]
+        monthly[m] = monthly.get(m, 0.0) + i["totale"]
+    series = sorted(monthly.items())
+    history = [{"mese": m, "fatturato": round(v, 2)} for m, v in series]
+    n = len(series)
+    if n < 2:
+        return {"history": history, "forecast": [], "growth_pct": 0, "trend": "stabile",
+                "total_forecast": 0, "method": "dati insufficienti"}
+    xs = list(range(n))
+    ys = [v for _, v in series]
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+    denom = sum((x - mean_x) ** 2 for x in xs) or 1
+    slope = sum((xs[i] - mean_x) * (ys[i] - mean_y) for i in range(n)) / denom
+    intercept = mean_y - slope * mean_x
+    resid = [ys[i] - (intercept + slope * xs[i]) for i in range(n)]
+    std = statistics.pstdev(resid) if n > 1 else 0.0
+    last_month = series[-1][0]
+    forecast = []
+    for k in range(1, months + 1):
+        val = max(intercept + slope * (n - 1 + k), 0)
+        forecast.append({"mese": _month_add(last_month, k), "fatturato_previsto": round(val, 2),
+                         "min": round(max(val - std, 0), 2), "max": round(val + std, 2)})
+    growth = round(slope / mean_y * 100, 1) if mean_y else 0
+    return {"history": history, "forecast": forecast, "growth_pct": growth,
+            "trend": "crescita" if slope > 0 else ("calo" if slope < 0 else "stabile"),
+            "total_forecast": round(sum(f["fatturato_previsto"] for f in forecast), 2),
+            "method": "regressione lineare"}
+
+
+@api_router.get("/bilanci/benchmark")
+async def bilanci_benchmark(company_id: str, anno: int | None = None, user: dict = Depends(current_user)):
+    await require_access(user, company_id)
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Azienda non trovata")
+    q = {"company_id": company_id}
+    if anno:
+        q["anno"] = anno
+    bils = await db.bilanci.find(q, {"_id": 0}).to_list(50)
+    if not bils:
+        raise HTTPException(status_code=404, detail="Nessun bilancio disponibile")
+    bil = sorted(bils, key=lambda b: b["anno"])[-1]
+    ind, ce = bil["indici"], bil["conto_economico"]
+    settore = company.get("settore", "")
+    ref = S.SECTOR_BENCHMARKS.get(settore, {"media": {}, "peers": []})
+    media, peers = ref["media"], ref["peers"]
+    comp_vals = {
+        "ricavi": ce["ricavi"],
+        "ebitda_margin_pct": ind["ebitda_margin_pct"],
+        "roe_pct": ind["roe_pct"],
+        "indice_liquidita": ind["indice_liquidita"],
+        "indebitamento": ind["indice_indebitamento"],
+    }
+    metrics = [
+        ("ebitda_margin_pct", "EBITDA Margin", "%", True),
+        ("roe_pct", "ROE", "%", True),
+        ("indice_liquidita", "Indice di Liquidità", "", True),
+        ("indebitamento", "Indice di Indebitamento", "", False),
+    ]
+    comparison = []
+    for key, label, suffix, hb in metrics:
+        v = comp_vals[key]
+        avg = media.get(key, 0)
+        better = (v >= avg) if hb else (v <= avg)
+        comparison.append({"key": key, "label": label, "suffix": suffix, "higher_better": hb,
+                           "value": v, "media": avg, "delta": round(v - avg, 2),
+                           "delta_pct": round((v - avg) / avg * 100, 1) if avg else 0, "better": better})
+    return {
+        "company": {"id": company_id, "name": company["name"], "settore": settore, "anno": bil["anno"], **comp_vals},
+        "media": {"nome": "Media settore", **media},
+        "peers": peers,
+        "comparison": comparison,
+        "num_aziende": len(peers) + 1,
+    }
+
+
 # ---------- Copilot ----------
 async def build_crm_context(user, company_id):
     flt = await scoped_filter(user, company_id)
@@ -481,7 +570,7 @@ async def copilot_chat(payload: ChatInput, user: dict = Depends(current_user)):
     crm_context = await build_crm_context(user, payload.company_id)
 
     system_message = (
-        "Sei il Copilot AI di FinDash CRM, un assistente esperto di contabilità italiana, fatturazione "
+        "Sei il Copilot AI di XPERT, un assistente esperto di contabilità italiana, fatturazione "
         "elettronica, incassi e bilanci. Rispondi SEMPRE in italiano, in modo chiaro e professionale. "
         "Usa i dati CRM forniti qui sotto per rispondere con numeri concreti. Se utile, formatta con "
         "elenchi puntati o brevi tabelle in markdown. Non inventare dati non presenti.\n\n"
@@ -594,7 +683,7 @@ async def delete_collaborator(cid: str, user: dict = Depends(current_user)):
 
 @api_router.get("/")
 async def root():
-    return {"message": "FinDash CRM API"}
+    return {"message": "XPERT API"}
 
 
 app.include_router(api_router)

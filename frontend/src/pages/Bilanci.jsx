@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, Legend,
 } from "recharts";
-import { Download, FileSpreadsheet } from "lucide-react";
+import { Download, FileSpreadsheet, Layers, TrendingUp, TrendingDown } from "lucide-react";
 
 const Row = ({ label, value, bold, tone }) => (
   <div className={`flex justify-between py-2 border-b border-border/60 ${bold ? "font-semibold" : ""}`}>
@@ -28,6 +28,7 @@ export default function Bilanci() {
   const { companyId, companies } = useCompany();
   const [bilanci, setBilanci] = useState([]);
   const [selId, setSelId] = useState(null);
+  const [bench, setBench] = useState(null);
 
   useEffect(() => {
     api.get(`/bilanci?company_id=${companyId}`).then((r) => {
@@ -38,6 +39,12 @@ export default function Bilanci() {
 
   const sel = bilanci.find((b) => b.id === selId);
   const companyName = (id) => companies.find((c) => c.id === id)?.name || id;
+
+  useEffect(() => {
+    if (!sel) { setBench(null); return; }
+    api.get(`/bilanci/benchmark?company_id=${sel.company_id}&anno=${sel.anno}`)
+      .then((r) => setBench(r.data)).catch(() => setBench(null));
+  }, [selId, sel?.company_id, sel?.anno]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const download = () => toast.success("Bilancio CEE generato e scaricato (PDF)");
 
@@ -128,6 +135,98 @@ export default function Bilanci() {
           </ResponsiveContainer>
         </div>
       </Card>
+
+      {bench && (
+        <div className="space-y-4" data-testid="benchmark-section">
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 rounded-xl bg-accent/10 text-accent flex items-center justify-center">
+              <Layers className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-heading text-lg font-semibold">Confronto di settore</h3>
+              <p className="text-sm text-muted-foreground">
+                Settore <strong>{bench.company.settore}</strong> · {bench.num_aziende} aziende confrontate
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {bench.comparison.map((c) => (
+              <Card key={c.key} className="p-4" data-testid={`benchmark-${c.key}`}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{c.label}</p>
+                <div className="flex items-end justify-between mt-2 gap-2">
+                  <div>
+                    <p className="font-heading text-2xl font-bold font-mono-num">{c.value}{c.suffix}</p>
+                    <p className="text-xs text-muted-foreground">Media settore: {c.media}{c.suffix}</p>
+                  </div>
+                  <Badge variant="outline" className={c.better ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-rose-100 text-rose-700 border-rose-200"}>
+                    {c.better ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
+                    {c.delta > 0 ? "+" : ""}{c.delta}{c.suffix}
+                  </Badge>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          <Card className="p-5">
+            <h4 className="font-heading font-semibold mb-4">Posizionamento vs media di settore</h4>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={[
+                  { name: "EBITDA %", Azienda: bench.company.ebitda_margin_pct, "Media settore": bench.media.ebitda_margin_pct },
+                  { name: "ROE %", Azienda: bench.company.roe_pct, "Media settore": bench.media.roe_pct },
+                  { name: "Liquidità", Azienda: bench.company.indice_liquidita, "Media settore": bench.media.indice_liquidita },
+                  { name: "Indebitamento", Azienda: bench.company.indebitamento, "Media settore": bench.media.indebitamento },
+                ]}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }} />
+                  <Legend />
+                  <Bar dataKey="Azienda" fill="#2563EB" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="Media settore" fill="#94A3B8" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          <Card data-testid="peer-table">
+            <div className="p-5 border-b border-border">
+              <h4 className="font-heading font-semibold">Aziende del settore a confronto</h4>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b border-border">
+                    <th className="px-5 py-3 font-semibold">Azienda</th>
+                    <th className="px-5 py-3 font-semibold text-right">Ricavi</th>
+                    <th className="px-5 py-3 font-semibold text-right">EBITDA %</th>
+                    <th className="px-5 py-3 font-semibold text-right">ROE %</th>
+                    <th className="px-5 py-3 font-semibold text-right">Liquidità</th>
+                    <th className="px-5 py-3 font-semibold text-right">Indebitamento</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { nome: bench.company.name, ...bench.company, self: true },
+                    ...bench.peers,
+                    { ...bench.media, media: true },
+                  ].map((r, idx) => (
+                    <tr key={idx} className={`border-b border-border/60 ${r.self ? "bg-accent/5 font-semibold" : r.media ? "bg-muted/40 italic" : ""}`}>
+                      <td className="px-5 py-3">{r.nome}{r.self ? " (tu)" : ""}</td>
+                      <td className="px-5 py-3 text-right font-mono-num">{euro(r.ricavi)}</td>
+                      <td className="px-5 py-3 text-right font-mono-num">{r.ebitda_margin_pct}%</td>
+                      <td className="px-5 py-3 text-right font-mono-num">{r.roe_pct}%</td>
+                      <td className="px-5 py-3 text-right font-mono-num">{r.indice_liquidita}</td>
+                      <td className="px-5 py-3 text-right font-mono-num">{r.indebitamento}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

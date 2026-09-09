@@ -1,7 +1,7 @@
-# FinDash CRM — PRD
+# XPERT — PRD
 
 ## Problem Statement (original, IT)
-Web app con dashboard su fatture e incassi di una società. Dati da CRM tipo TeamSystem, collegamento a PEC Aruba, lettura fatture da Google Drive, storicizzazione dati nel DB, chatbot Copilot per interrogare il CRM, ed estrazione bilanci società.
+Web app (dashboard) su fatture e incassi di una società. Dati da CRM tipo TeamSystem, PEC Aruba, lettura fatture da Google Drive, storicizzazione in DB, chatbot Copilot per interrogare il CRM, estrazione bilanci. Aggiunte successive: collaboratori con permessi per azienda, servizio email senza credenziali, rinomina in XPERT, benchmark di settore sui bilanci, previsioni sul fatturato.
 
 ## User Choices
 - Dati DEMO realistici (mock realistici salvati in DB).
@@ -35,6 +35,15 @@ Web app con dashboard su fatture e incassi di una società. Dati da CRM tipo Tea
 - Seeded demo: 3 aziende, 47 fatture, PEC, file Drive, bilanci 2023/24.
 - JWT + Google auth, password reset flow, brute-force protection.
 - Hourly TeamSystem sync cron (verified 401/accepted).
+
+## Implemented (iteration 2)
+- Collaboratori con permessi per azienda (RBAC: viewer/editor/admin via company_members). Admin-only management UI + AdminRoute guard.
+- Email credential-free (Emergent-managed Resend): inviti collaboratori + solleciti fattura.
+
+## Implemented (iteration 3)
+- Rinomina completa a XPERT (frontend + backend + email + tab title).
+- Previsioni fatturato: GET /api/dashboard/forecast (regressione lineare, storico + 3 mesi, crescita %/mese) con grafico ComposedChart in dashboard.
+- Benchmark di settore sui bilanci: GET /api/bilanci/benchmark (media settore + peer + indici) con schede confronto, grafico e tabella peer.
 
 ## Backlog / Remaining
 - P1: Real TeamSystem / Aruba PEC / Google Drive API integration (needs user credentials).

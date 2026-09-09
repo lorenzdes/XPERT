@@ -84,7 +84,7 @@ export default function Layout() {
           <div className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center text-white">
             <TrendingUp className="h-5 w-5" />
           </div>
-          <span className="font-heading text-lg font-bold text-white">FinDash CRM</span>
+          <span className="font-heading text-lg font-bold text-white">XPERT</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {NAV.filter((i) => !i.adminOnly || user?.role === "admin").map((item) => (

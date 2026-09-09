@@ -36,7 +36,7 @@ export default function Register() {
           <div className="h-10 w-10 rounded-xl bg-[#0B132B] flex items-center justify-center text-white">
             <TrendingUp className="h-5 w-5" />
           </div>
-          <span className="font-heading text-xl font-bold">FinDash CRM</span>
+          <span className="font-heading text-xl font-bold">XPERT</span>
         </div>
         <h2 className="font-heading text-3xl font-bold tracking-tight">Crea un account</h2>
         <p className="text-muted-foreground mt-2 text-sm">Inizia a gestire fatture e incassi</p>

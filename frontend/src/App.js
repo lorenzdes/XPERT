@@ -30,6 +30,12 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+function AdminRoute({ children }) {
+  const { user } = useAuth();
+  if (user && user.role === "admin") return children;
+  return <Navigate to="/" replace />;
+}
+
 function AppRouter() {
   const location = useLocation();
   if (location.hash?.includes("session_id=")) return <AuthCallback />;
@@ -55,7 +61,7 @@ function AppRouter() {
         <Route path="pec" element={<Pec />} />
         <Route path="copilot" element={<Copilot />} />
         <Route path="bilanci" element={<Bilanci />} />
-        <Route path="collaboratori" element={<Collaboratori />} />
+        <Route path="collaboratori" element={<AdminRoute><Collaboratori /></AdminRoute>} />
         <Route path="impostazioni" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
