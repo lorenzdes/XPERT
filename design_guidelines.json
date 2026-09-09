@@ -1,0 +1,137 @@
+{
+  "project_name": "FinTech ERP Italian Dashboard (TeamSystem & Aruba PEC Integration)",
+  "app_type": "hybrid_fullstack",
+  "language": "it",
+  "theme": {
+    "mode": "light",
+    "support_dark_toggle": true,
+    "archetype": "High-Contrast Corporate Fintech (Archetype 4 + Archetype 1 Hybrid)"
+  },
+  "colors": {
+    "primary": "#0F172A",
+    "primary_hover": "#1E293B",
+    "accent_blue": "#2563EB",
+    "accent_blue_hover": "#1D4ED8",
+    "success_emerald": "#059669",
+    "warning_amber": "#D97706",
+    "danger_rose": "#E11D48",
+    "background_light": "#F8FAFC",
+    "card_light": "#FFFFFF",
+    "border_light": "#E2E8F0",
+    "text_main": "#0F172A",
+    "text_muted": "#64748B",
+    "sidebar_bg": "#0B132B",
+    "sidebar_text": "#94A3B8",
+    "sidebar_text_active": "#FFFFFF",
+    "sidebar_active_bg": "#1E293B"
+  },
+  "typography": {
+    "heading_font": "Plus Jakarta Sans, sans-serif",
+    "body_font": "Inter, sans-serif",
+    "mono_font": "JetBrains Mono, monospace",
+    "scale": {
+      "h1": "text-3xl sm:text-4xl font-bold tracking-tight",
+      "h2": "text-2xl sm:text-3xl font-semibold tracking-tight",
+      "h3": "text-xl font-semibold",
+      "h4": "text-lg font-medium",
+      "body": "text-sm text-slate-700 leading-relaxed",
+      "small_label": "text-xs font-semibold uppercase tracking-wider text-slate-500"
+    }
+  },
+  "layout_and_navigation": {
+    "structure": "Sidebar + Header + Scrollable Content Area + Collapsible Copilot Chat Panel",
+    "sidebar": {
+      "width": "w-64",
+      "sections": [
+        {"id": "dashboard", "label": "Dashboard & Incassi", "icon": "LayoutDashboard"},
+        {"id": "fatture", "label": "Gestione Fatture", "icon": "FileText"},
+        {"id": "drive_sync", "label": "Google Drive Sync", "icon": "HardDrive"},
+        {"id": "pec_aruba", "label": "PEC Aruba Inbox", "icon": "Mail"},
+        {"id": "copilot", "label": "CRM Copilot AI", "icon": "Bot"},
+        {"id": "bilanci", "label": "Estrazione Bilanci", "icon": "BarChart3"},
+        {"id": "settings", "label": "Impostazioni CRM", "icon": "Settings"}
+      ]
+    },
+    "header": {
+      "sticky": true,
+      "components": [
+        "Company Selector (P.IVA / Ragione Sociale)",
+        "TeamSystem CRM Sync Status Indicator (Ultimo sync, pulsante Sincronizza ORA)",
+        "PEC Aruba Unread Badge",
+        "Google Drive Connection Pill",
+        "User Profile Dropdown & Theme Switcher"
+      ]
+    }
+  },
+  "key_features_and_views": [
+    {
+      "view_id": "dashboard",
+      "title": "Panoramica Fatturato e Incassi",
+      "components": [
+        "KPI Cards: Totale Fatturato, Incassato, In Scadenza (Pending), Scaduto (Overdue)",
+        "Trend Grafico: Revenue vs Incassi mensili (Recharts Area/Bar chart)",
+        "Tabella Ultime Fatture con Filtri (Stato: Pagata, Da Pagare, In Ritardo)",
+        "Azione Rapida: Sollecito PEC o Export XML/PDF"
+      ]
+    },
+    {
+      "view_id": "drive_sync",
+      "title": "Lettore Fatture Google Drive",
+      "components": [
+        "Status Connessione Drive e Cartella di Destinazione",
+        "Lista File PDF/XML Fatture rilevate su Drive",
+        "Pulsante 'Importa e Analizza con OCR/TeamSystem'",
+        "Storico Sincronizzazioni e Caching Locale (localStorage/IndexedDB)"
+      ]
+    },
+    {
+      "view_id": "pec_aruba",
+      "title": "Integrazione Servizio PEC Aruba",
+      "components": [
+        "Inbox PEC (Ricevute di Consegna, Accettazione, Messaggi Ricevuti)",
+        "Compositore PEC con Allegati e Invio Certificato",
+        "Associazione automatica PEC -> Fattura / Cliente CRM"
+      ]
+    },
+    {
+      "view_id": "copilot",
+      "title": "Copilot Chatbot CRM TeamSystem",
+      "components": [
+        "Chat Interface per interrogazioni in linguaggio naturale ('Quali fatture sono scadute questo mese?')",
+        "Quick Query Chips ('Estratto conto cliente ACME', 'Previsione incassi Q3', 'Verifica saldo PEC')",
+        "Risposte strutturate con tabelle interattive ed export rapido"
+      ]
+    },
+    {
+      "view_id": "bilanci",
+      "title": "Estrazione Bilanci Società",
+      "components": [
+        "Stato Patrimoniale & Conto Economico estrazione da CRM",
+        "Visualizzazione Indici Finanziari (MOL, EBITDA, Indice di Liquidità)",
+        "Pulsante Download Bilancio CEE (PDF / Excel)"
+      ]
+    }
+  ],
+  "components_strategy": {
+    "use_shadcn_js_components": [
+      "table.jsx", "card.jsx", "button.jsx", "badge.jsx", "dialog.jsx",
+      "tabs.jsx", "select.jsx", "input.jsx", "dropdown-menu.jsx", "sonner.jsx"
+    ],
+    "file_extension": ".jsx",
+    "data_persistence": "Store synced state, custom settings, simulated offline invoices, and PEC cache in localStorage so data persists across browser sessions."
+  },
+  "media_assets": {
+    "dashboard_preview_image": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "business_laptop_image": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?crop=entropy&cs=srgb&fm=jpg&q=85"
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow Italian language for all UI elements, labels, KPI descriptions, empty states, and toast notifications.",
+    "Implement data persistence (localStorage / mock backend DB) for all invoices, PEC messages, Drive file statuses, and Copilot query history so closing or refreshing the app keeps all state intact.",
+    "Ensure all interactive components have unique data-testid attributes (e.g., data-testid='kpi-card-fatturato', data-testid='sync-teamsystem-btn').",
+    "Avoid generic raw styling. Use dense high-contrast tables with status badges (Green=Pagata, Amber=In Scadenza, Red=Scaduto).",
+    "Include a functional mock backend or comprehensive API client layer to simulate real TeamSystem CRM sync, Google Drive API, Aruba PEC SMTP/IMAP protocol responses, and Copilot AI natural language responses."
+  ]
+},
+path: "/app/design_guidelines.json",
+overwrite: true
+}

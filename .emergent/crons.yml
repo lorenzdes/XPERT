@@ -1,0 +1,8 @@
+crons:
+  - name: teamsystem-sync
+    description: "Sincronizza periodicamente fatture, incassi e bilanci dal CRM TeamSystem ogni ora"
+    cron: "0 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/sync"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
